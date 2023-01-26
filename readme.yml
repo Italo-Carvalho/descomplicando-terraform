@@ -1,0 +1,114 @@
+rodar terraform no docker: docker run -it -v $PWD:/app -w /app --entrypoint "" hashicorp/terraform:light sh
+manipular json:
+    - apk -U add jq
+    - ex:
+        terraform state pull | jq .resources
+
+- Blocks: ~= Obj
+
+- Arguments: x = y in block, all arguments is pre-defined
+
+- Identifiers: arguments/blocks custom names
+
+- Expressions: 
+    types:
+        - string: "hello"
+        - number: 1 / 1.3213
+        - bool: true / false
+        - list: ["a", "b", "c"]
+        - map: {name = "italo", age = 21}
+        - null: omit
+
+- Input Variables:
+    Invalid Identifiers:
+        - source
+        - version
+        - providers
+        - count
+        - for_each
+        - lifecycle
+        - depends_on
+        - locals
+    Arguments:
+        default: default value
+        type: 
+        description:
+        validation:
+        sensitive:
+
+- Presedencia de Variavel: Os ultimos tem presedencia
+    - enviroment variables
+    - terraform.tfvars
+    - terraform.tfvars.json
+    - *.auto.tfvars ou *.auto.tfvars.json
+    -  -var ou -var-file
+
+- Modules:
+    fluxo (ex):
+        1. modulo root: gera input para o modulo filho
+        2. modulo child: provisiona resources no provedor
+        3. modulo child: gera outputs para o modulo raiz
+        4. modulo root: gera outputs para o operador
+    tudo é input, exerto:
+        - source
+        - version
+        - providers
+
+- Terraform[module] > Backends:
+    - responsavel por guardar o "state"
+
+- Tfvars:
+    Qualquer arquivo que terminar com ".auto.tfvars" ou ".auto.tfvars.json" vai ser carregado automaticamente
+
+[cmd] terraform init:
+    - inicia o .terraform, tem tudo que o binario local precisa (plugins etc...)
+    - configura o backend
+
+[cmd] terraform plan: 
+    - Verifica oque vc escreveu e o que tem no state
+    terraform plan -destroy:
+        - Cria um plano de destruição
+    terraform apply:
+        - (Após o plan) Aplica o plano a infra
+
+
+[cmd] terraform destroy:
+    -  Destroi tudo que tem nos arquivos HCL
+
+[cmd] terraform console [options] [dir]:
+    - O console interage com o state
+
+[cmd] terraform refresh:
+    - Atualiza o state de acordo com a infraestrutura real
+
+State:
+    Armazena informacoes que vc manipula atravez do terraform, 
+    com proposito de mapear o mundo real
+
+    Performace:
+        - Funciona como cache dos atributos de todos os recursos.
+        - Quando rodar "terraform plan", o terraform Verifica
+            norvamento os recursos com o provedor, porém para
+            grandes infraestruturas é recomentavel usar 
+            "terraform [plan/apply] -refresh=false" pra que
+            isto não aconteça.
+
+    State locking:
+        - Bloqueia seu "state" para todas as operações que podem escrever no "state"
+        - [Required] DynamoDb
+
+    [cmd] terraform state:
+        - terraform state pull >> state-local.tfstate: mostra o "state" remoto no stdout
+        - terraform state push state-local.tfstate: manda o "state" local para o remoto
+            - [Warning]: antes do "push" o serial tem que ser atualizado
+
+
+
+[Block] Provider:
+    - Informa em qual provedor de recursos vc vai solicitar
+    Meta arguments [disponivel em todos providers]:
+        - alias: Multiple Priver Configurations
+        - version: informa a versão do plugin
+
+Boas praticas:
+    /main.tf: apenas providers e terraform
