@@ -3,12 +3,57 @@ manipular json:
     - apk -U add jq
     - ex:
         terraform state pull | jq .resources
+Grafo:
+    - apk -U add graphviz
 
 - Blocks: ~= Obj
 
 - Arguments: x = y in block, all arguments is pre-defined
 
 - Identifiers: arguments/blocks custom names
+
+- Loops:
+    for_each (only map/sets):
+        inside module:
+            resource "azurerm_resource_group" "rg"{
+                    for_each = {
+                        a_group = "eastus",
+                        another_group = "westus2"
+                    }
+                    name = each.key
+                    location = each.value
+            }
+        with Sets:
+            variable "subnets_ids"{
+                type = list(string)
+            }
+            resource "aws_instance" "server"{
+                for_each = toset(var.subnets_ids)
+
+                ami = "ami-777777"
+                instance_type = "t2.micro"
+                subnet_id = each.key
+
+                tags = {
+                    Name = "Server ${each.key}"
+                }
+            }
+
+
+- Dymanic blocks:
+    Cria varios blocos dentro de outro bloco:
+    resource "aws_security_group" "example"{
+        name = "example"
+
+        dynamic "ingress"{
+            for_each = var.service_ports
+            content{ # conteudo que cada bloco ingress vai receber
+                from_port = ingress.value # {{ nome do bloco }}.{{ item do loop }}
+                to_port = ingress.value
+                protocol = "tcp"
+            }
+        }
+    }
 
 - Expressions: 
     types:
@@ -18,6 +63,33 @@ manipular json:
         - list: ["a", "b", "c"]
         - map: {name = "italo", age = 21}
         - null: omit
+    Complex types:
+        Tipos complexos aceitam apenas um tipo por vez
+        Any: aceita qualquer tipo de variaveis, porém quando declarado,
+        permanece com o mesmo tipo declarado inicialmente até o fim.
+        - list(type) any
+        - map(type) any
+        - set(type) coleção de tipos únicos (sem identificador ou ordem)
+    Structural types:
+        object(...) {<KEY> = <TYPE>, <KEY> = <TYPE>, <KEY> = <TYPE>}
+            ex: object({name=string, age=number})
+                {
+                 name = "italo"
+                 age = 21
+                }
+        tuple(...) [<TYPE>,<TYPE>,<TYPE>,<TYPE>]
+            ex: tuple([string, number, bool])
+                ["i", 21, true]
+
+    types auto conversion:
+        true <-> "true"
+        false <-> "false"
+        11 <-> "11"
+
+- String templates:
+    - "Hello, ${var.name}"
+    - "Hello %{ if var.name != ""}${ var.name }%{ else }unnamed%{ endif }!"
+    
 
 - Input Variables:
     Invalid Identifiers:
@@ -85,6 +157,10 @@ State:
     Armazena informacoes que vc manipula atravez do terraform, 
     com proposito de mapear o mundo real
 
+    Dados sensiveis:
+        - ative o encrypt em seu backend
+            - O state apenas é criptografados após o "apply"
+
     Performace:
         - Funciona como cache dos atributos de todos os recursos.
         - Quando rodar "terraform plan", o terraform Verifica
@@ -98,10 +174,106 @@ State:
         - [Required] DynamoDb
 
     [cmd] terraform state:
-        - terraform state pull >> state-local.tfstate: mostra o "state" remoto no stdout
-        - terraform state push state-local.tfstate: manda o "state" local para o remoto
+        - pull >> state-local.tfstate: mostra o "state" remoto no stdout
+        - push state-local.tfstate: manda o "state" local para o remoto
             - [Warning]: antes do "push" o serial tem que ser atualizado
+        - list: lista todos recursos
+            - aws_instance.bar
+            - module.elb
+            - id=sg-1234abcd
+        - mv [options] SOURCE DESTINATION:
+            - renomeando recurso:
+                - terraform state mv "aws_instance.web" "aws_instance.web2" 
+            - Adiciona a instacia ao modulo:
+                - terraform state mv aws_instance.web module.app.aws_instance.web 
+        - rm: Não destroi fisicamente os recursos
+            - terraform state rm module.app.aws_instance.web2
 
+Taint:
+    Marca manualmente qual "resource" deve ser recriado
+    após o plan e apply.
+
+    terraform taint [options] address:
+        - terraform taint aws_instance.web[0]
+        - terraform untaint aws_instance.web[0]:
+            remover marca de resconstrução
+
+Graph:
+    Gerar representação visual da configuração ou executação do plan
+    [cmd]terraform graph -type=plan:
+        por padrão ele pegar o grafo do "plan", porém pode pegar do
+        "plan-destroy", "apply", "validade", "input", "refresh"
+    [cmd/grafo] terraform graph | dot -Tsvg > graph.svg:
+        renderiza o grafo
+
+Validações:
+    Vai validar se o código existe erro sintatico:
+        [cmd] terraform init -backend=false:
+            apenas para gerar o diretorio do terraform
+            para que o validade funcione.
+        [cmd] terraform valdiate [option] [dir]:
+            options:
+                -json
+                -no-color
+
+    Vai reescrever o código para a formatação correta:
+        [cmd] terraform fmt [options] [DIR]:
+            options:
+                -list=false
+                -write=false
+                -diff
+                -check: ajuda no pipelane retornando codigo de erro ex= rc 0, rc 3
+                -recursive
+
+Workspaces: Multiplos "states" isolados para o mesmo backend
+    [cmd] terraform workspace new [workspace-name]: Criar novo workspace
+    [cmd] terraform workspace select [workspace-name]: Seleciona workspace
+    [cmd] terraform workspace list: Lista todos os workspaces
+    ex:
+        - terraform workspace new production
+        - terraform workspace new staging
+    tips:
+        - Use interpolação para usar valores para cada workspace:
+            ex: resource "aws_instance" "example"{
+                    count = "${ terraform.workspace == 'default' ? 5 : 1 }"
+                }
+
+Dependencies:
+    Implicit (ex):
+        EIP{EC2.ID} -> EC2: |
+            EIP depende do EC2(id), então o terraform, automaticamente
+            provisiona primeira a EC2 para ter seu id que será usado no
+            EIP.
+        apply (ex):
+            - create EC2
+            - create EIP (com o id do ec2)
+        destroy (ex):
+            - remove EIP
+            - remove EC2
+    Explicit:
+        depends_on [list] (ex):
+            EIP{EC2.ID} -> EC2.web <- EC2.west{depends_ond[EC2.web]}
+        apply (ex):
+            - create EC2.web
+            - create. EC2.west
+            - create EIP
+        destroy (ex):
+            - remove EIP
+            - remove EC2.west
+            - remove EC2.web
+
+
+[cmd] terraform import: Apenas manipula o "state", não gera codigo.
+        - terraform import aws_instance.example i-abcd1234
+
+Troubleshooting:
+   TF_LOG:
+        - TRACE: Muito verboso
+        - DEBUG: verboso
+        - INFO: normal
+        - WARM / ERROR: pouco verboso
+    ex[cmd]:
+        TF=DEBUG terraform plan -out plan
 
 
 [Block] Provider:
@@ -112,3 +284,7 @@ State:
 
 Boas praticas:
     /main.tf: apenas providers e terraform
+
+Hellp:
+    - terraform (docs)
+    - terraform -install-autocomplete

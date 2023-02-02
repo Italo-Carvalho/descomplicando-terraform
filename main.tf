@@ -1,5 +1,5 @@
 provider "aws" {
-  region  = "us-east-1"
+  region  = terraform.workspace == "production" ? "us-west-1" : "us-west-2"
   version = "~> 4.0"
 }
 
@@ -15,5 +15,6 @@ terraform {
     dynamodb_table = "terraform-state-lock-dynamodb-lock-state" # Automaticamente habilita lock-state
     key            = "terraform-test.tfstate"
     region         = "us-east-1"
+    encrypt        = true
   }
 }
