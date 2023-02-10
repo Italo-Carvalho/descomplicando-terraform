@@ -18,6 +18,19 @@ resource "aws_instance" "web_west" {
   instance_type = each.value
   provider      = aws.west
 
+  provisioner "remote-exec" {
+    inline = [
+      "sudo amazon-linux-extras install -y nginx1.12",
+      "sudo systemctl start nginx"
+    ]
+    connection {
+      type = "ssh"
+      host = self.associate_public_ip_address
+      user = "ec2-user"
+      private_key = file("terraform.pem")
+    }
+  }
+
   tags = {
     Name = "HelloWorld"
   }

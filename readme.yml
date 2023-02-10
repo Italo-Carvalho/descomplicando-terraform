@@ -89,7 +89,7 @@ Grafo:
 - String templates:
     - "Hello, ${var.name}"
     - "Hello %{ if var.name != ""}${ var.name }%{ else }unnamed%{ endif }!"
-    
+
 
 - Input Variables:
     Invalid Identifiers:
@@ -282,9 +282,59 @@ Troubleshooting:
         - alias: Multiple Priver Configurations
         - version: informa a versão do plugin
 
+[Block] Resource:
+    - null_resource: 
+    [Block] Provisioner:
+        - Arguments:
+            local-exec: chama o comando após o recurso ser criado
+            remote-exec: chama scripts diretamente no servidor remoto
+            chef: ...
+            connection: ...
+            file: ...
+            habitat: ...
+            null_resource: ...
+            salt-masterless: ...
+        [Block] connection:
+            connection {
+                type = "ssh"
+                    host = self.associate_public_ip_address
+                    user = "ec2-user"
+                    private_key = file("terraform.pem")
+                }
+        - options:
+            - when (ex):
+                - when = destroy
+            - on_failure (ex):
+                - on_failure = continue
+            - command = "echo ${aws_instance.web.private_ip} >> private_ips.txt"
+            - inline = [
+                    "sudo amazon-linux-extras install -y nginx1.12",
+                    "sudo systemctl start nginx"
+                ]
 Boas praticas:
     /main.tf: apenas providers e terraform
 
 Hellp:
     - terraform (docs)
     - terraform -install-autocomplete
+
+========================================================================================================================
+
+TF + ANSIBLE pipelines:
+    1. ansible:
+     - clone
+     - teste estático (yamllint)
+     - baixar dependencias
+     - teste Molecule (suit de teste do Ansible)
+        - cria maquina
+        - roda o ansible
+        - varifica (teste)
+        - destroy
+     - Docker build / Packer build / EMI...
+     - Docker push / Subir artefato...
+
+    2. terrafrom:
+     - Provisiona [Docker image / arterfato / EMI (gerado pela pipeline do ansible)]
+     # - config DNS
+     # - CND
+     # - deploy blue/green
